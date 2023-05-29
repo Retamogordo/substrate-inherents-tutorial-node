@@ -10,7 +10,7 @@ use sp_std::vec::Vec;
 /// https://paritytech.github.io/substrate/master/sp_inherents/index.html
 pub use pallet::*;
 /// Type for Scale-encoded data provided by the block author
-type InherentType = Vec<u8>;
+type InherentRawType = Vec<u8>;
 
 #[cfg(test)]
 mod mock;
@@ -127,7 +127,7 @@ pub mod pallet {
 	impl<T: Config> Pallet<T> {
 		pub fn get_and_decode_data(data: &InherentData) -> Option<T::InherentDataType> {
 			let res = data
-				.get_data::<InherentType>(&INHERENT_IDENTIFIER)
+				.get_data::<InherentRawType>(&INHERENT_IDENTIFIER)
 				.ok()
 				.unwrap_or_default()
 				.and_then(|encoded_data| T::InherentDataType::decode(&mut &encoded_data[..]).ok());
