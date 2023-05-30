@@ -4,15 +4,12 @@ use serde::Deserialize;
 use sp_core::Encode;
 use sp_inherents::{InherentData, InherentIdentifier};
 use std::fmt::Debug;
-//use serde::de::DeserializeOwned;
 use sc_client_api::HeaderBackend;
 use sp_api::ProvideRuntimeApi;
 use sp_arithmetic::{PerThing, Permill, Rounding};
 use sp_core::H256;
 use std::sync::Arc;
-//use sp_runtime::generic::BlockId;
 use sp_runtime::traits::{Block as BlockT, PhantomData};
-//use std::marker::PhantomData;
 use node_template_runtime::runtime_apis::WeatherOrder;
 
 #[derive(Deserialize, Debug)]
