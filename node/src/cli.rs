@@ -1,4 +1,4 @@
-use node_template_runtime::InherentDataType;
+use node_template_runtime::InherentExampleDataType;
 use sc_cli::RunCmd;
 
 #[derive(Debug, clap::Parser)]
@@ -10,7 +10,7 @@ pub struct Cli {
 	pub run: RunCmd,
 
 	#[clap(long)]
-	pub inherent_data: Option<InherentDataType>,
+	pub inherent_data: Option<InherentExampleDataType>,
 }
 
 #[derive(Debug, clap::Subcommand)]

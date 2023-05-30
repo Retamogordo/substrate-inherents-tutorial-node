@@ -3,7 +3,8 @@
 use sp_core::{Decode, Encode};
 use sp_inherents::{InherentIdentifier, IsFatalError};
 use sp_runtime::traits::Zero;
-use sp_std::vec::Vec;
+use sp_std::{borrow::ToOwned, vec::Vec};
+//use sp_std::fmt::*;
 
 /// A pallet demontrating an example of usage of inherent extrinsics.
 /// Docs on inherent extrinsics are available here:
@@ -23,7 +24,11 @@ mod benchmarking;
 pub mod weights;
 pub use weights::*;
 
-pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"ext_data";
+pub const INHERENT_IDENTIFIER: InherentIdentifier = *b"weat_orc";
+
+pub trait DeconstructableAsFloat {
+	fn deconstruct(&self) -> f32;
+}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -48,18 +53,26 @@ pub mod pallet {
 			+ Clone
 			+ Parameter
 			+ Member
-			+ MaxEncodedLen;
+			+ MaxEncodedLen
+			+ DeconstructableAsFloat;
 	}
 
 	// Storage items for inherent data created by the block author
 	#[pallet::storage]
 	pub type StoredInherentData<T: Config> = StorageValue<_, T::InherentDataType, OptionQuery>;
 
+	#[pallet::storage]
+	#[pallet::getter(fn weather_order)]
+	pub type WeatherOrder<T: Config> = StorageValue<_, (i16, i16), OptionQuery>;
+
 	#[pallet::event]
 	#[pallet::generate_deposit(pub(super) fn deposit_event)]
 	pub enum Event<T: Config> {
-		/// Triggered when 'set' transaction succedes
-		InherentDataSet { data: T::InherentDataType },
+		/// Triggered when 'weather_data_set' transaction succedes
+		WeatherDataSet { data: <str as ToOwned>::Owned },
+		/// Triggered when a user submits geo location for weather report they are interested to
+		/// receive from the oracle
+		WeatherOrderSet { latlong: (<str as ToOwned>::Owned, <str as ToOwned>::Owned) },
 	}
 
 	// Errors inform users that something went wrong.
@@ -67,6 +80,11 @@ pub mod pallet {
 	pub enum Error<T> {
 		/// Triggered when the inherent data is already set for the current block
 		AlreadySet,
+		/// Triggered when the weather order is already set for the current block
+		WeatherOrderAlreadySet,
+		/// Latitude/Longitude format is similar to signed float number
+		FailedParsingLatitudeOrLongitude,
+		UnableToCreateEventData,
 	}
 
 	#[pallet::call]
@@ -74,14 +92,49 @@ pub mod pallet {
 		/// Unsigned extrinsic submitted by create_inherent(..)
 		#[pallet::call_index(0)]
 		#[pallet::weight(T::WeightInfo::set())]
-		pub fn set(origin: OriginFor<T>, inherent_data: T::InherentDataType) -> DispatchResult {
+		pub fn weather_data_set(
+			origin: OriginFor<T>,
+			weather_data: T::InherentDataType,
+		) -> DispatchResult {
 			// as this call is created by block auth it is supposed to be unsigned
 			ensure_none(origin)?;
 			ensure!(StoredInherentData::<T>::get().is_none(), Error::<T>::AlreadySet);
 
-			StoredInherentData::<T>::put(&inherent_data);
+			StoredInherentData::<T>::put(&weather_data);
 
-			Self::deposit_event(Event::InherentDataSet { data: inherent_data });
+			let mut s = <str as ToOwned>::Owned::new();
+			sp_std::fmt::write(&mut s, format_args!("{} °C", weather_data.deconstruct()))
+				.map_err(|_| Error::<T>::UnableToCreateEventData)?;
+
+			Self::deposit_event(Event::WeatherDataSet { data: s });
+
+			Ok(())
+		}
+
+		#[pallet::call_index(1)]
+		#[pallet::weight(T::WeightInfo::order_weather_data())]
+		pub fn order_weather_data(
+			origin: OriginFor<T>,
+			lat_str: <str as ToOwned>::Owned,
+			long_str: <str as ToOwned>::Owned,
+		) -> DispatchResult {
+			ensure_signed(origin)?;
+
+			let lat = lat_str
+				.parse::<f32>()
+				.map_err(|_| Error::<T>::FailedParsingLatitudeOrLongitude)?;
+			let long = long_str
+				.parse::<f32>()
+				.map_err(|_| Error::<T>::FailedParsingLatitudeOrLongitude)?;
+
+			let lat = (lat * 10.0) as i16;
+			let long = (long * 10.0) as i16;
+
+			ensure!(WeatherOrder::<T>::get().is_none(), Error::<T>::WeatherOrderAlreadySet);
+
+			WeatherOrder::<T>::put(&(lat, long));
+
+			Self::deposit_event(Event::WeatherOrderSet { latlong: (lat_str, long_str) });
 
 			Ok(())
 		}
@@ -91,6 +144,7 @@ pub mod pallet {
 		fn on_initialize(_n: T::BlockNumber) -> Weight {
 			// remove the inherent from storage upon block initialization
 			StoredInherentData::<T>::kill();
+			WeatherOrder::<T>::kill();
 
 			Zero::zero()
 		}
@@ -116,11 +170,12 @@ pub mod pallet {
 
 		fn create_inherent(data: &InherentData) -> Option<Self::Call> {
 			// create and return the extrinsic call if the data could be read and decoded
-			Self::get_and_decode_data(data).map(|inherent_data| Call::set { inherent_data })
+			Self::get_and_decode_data(data)
+				.map(|weather_data| Call::weather_data_set { weather_data })
 		}
 		// Determine if a call is an inherent extrinsic
 		fn is_inherent(call: &Self::Call) -> bool {
-			matches!(call, Call::set { .. })
+			matches!(call, Call::weather_data_set { .. })
 		}
 	}
 
@@ -139,7 +194,6 @@ pub mod pallet {
 #[derive(Encode)]
 pub enum InherentError {
 	InherentRequiredForDataPresent,
-	//	NotPresent123,
 }
 
 impl IsFatalError for InherentError {

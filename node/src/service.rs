@@ -1,7 +1,7 @@
 //! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
 
-use crate::inherent_data_provider;
-use node_template_runtime::{self, opaque::Block, InherentDataType, RuntimeApi};
+use crate::{inherent_data_provider, weather_oracle};
+use node_template_runtime::{self, opaque::Block, InherentExampleDataType, RuntimeApi};
 use sc_client_api::BlockBackend;
 use sc_consensus_aura::{ImportQueueParams, SlotProportion, StartAuraParams};
 use sc_consensus_grandpa::SharedVoterState;
@@ -147,7 +147,7 @@ pub fn new_partial(
 /// Builds a new service for a full client.
 pub fn new_full(
 	mut config: Configuration,
-	inherent_data: Option<InherentDataType>,
+	inherent_data: Option<InherentExampleDataType>,
 ) -> Result<TaskManager, ServiceError> {
 	let sc_service::PartialComponents {
 		client,
@@ -239,6 +239,7 @@ pub fn new_full(
 
 		let slot_duration = sc_consensus_aura::slot_duration(&*client)?;
 
+		let client_clone = Arc::clone(&client);
 		let aura = sc_consensus_aura::start_aura::<AuraPair, _, _, _, _, _, _, _, _, _, _>(
 			StartAuraParams {
 				slot_duration,
@@ -246,18 +247,23 @@ pub fn new_full(
 				select_chain,
 				block_import,
 				proposer_factory,
-				create_inherent_data_providers: move |_, ()| async move {
-					let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
+				create_inherent_data_providers: move |_, ()| {
+					let client_clone = Arc::clone(&client_clone);
+					async move {
+						let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
 
-					let slot =
-							sp_consensus_aura::inherents::InherentDataProvider::from_timestamp_and_slot_duration(
-								*timestamp,
-								slot_duration,
-							);
-					let external_data_provider =
-						inherent_data_provider::ExternalDataInherentProvider(inherent_data);
+						let slot =
+								sp_consensus_aura::inherents::InherentDataProvider::from_timestamp_and_slot_duration(
+									*timestamp,
+									slot_duration,
+								);
+						let external_data_provider =
+							inherent_data_provider::ExternalDataInherentProvider(inherent_data);
 
-					Ok((slot, timestamp, external_data_provider))
+						let weather_oracle = weather_oracle::InherentProvider::new(client_clone);
+
+						Ok((slot, timestamp, external_data_provider, weather_oracle))
+					}
 				},
 				force_authoring,
 				backoff_authoring_blocks,

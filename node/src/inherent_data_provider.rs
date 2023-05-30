@@ -1,13 +1,13 @@
 use async_trait;
-use node_template_runtime::{inherents_example::INHERENT_IDENTIFIER, InherentDataType};
+use node_template_runtime::{inherents_example::INHERENT_IDENTIFIER, InherentExampleDataType};
 use sp_core::Encode;
 use sp_inherents::{InherentData, InherentIdentifier};
 use std::fmt::Debug;
 
 /// The provider of inherent data from the Node to the Runtime
-/// It holds data of InherentDataType defined by the Runtime
+/// It holds data of InherentExampleDataType defined by the Runtime
 #[derive(Debug, Clone)]
-pub struct ExternalDataInherentProvider(pub Option<InherentDataType>);
+pub struct ExternalDataInherentProvider(pub Option<InherentExampleDataType>);
 
 /// Implementation of sp_inherents::InherentDataProvider trait for ExternalDataInherentProvider
 #[async_trait::async_trait]

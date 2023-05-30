@@ -2,6 +2,7 @@
 members = [
     "node",
     "pallets/inherents-example",
+    "pallets/weather-oracle",
     "runtime",
 ]
 [profile.release]

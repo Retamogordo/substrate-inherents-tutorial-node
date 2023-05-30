@@ -7,9 +7,10 @@
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 use pallet_grandpa::AuthorityId as GrandpaId;
+use scale_info::TypeInfo;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
-use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
+use sp_core::{crypto::KeyTypeId, Decode, Encode, MaxEncodedLen, OpaqueMetadata};
 use sp_runtime::{
 	create_runtime_str, generic, impl_opaque_keys,
 	traits::{
@@ -45,8 +46,8 @@ use pallet_transaction_payment::{ConstFeeMultiplier, CurrencyAdapter, Multiplier
 pub use sp_runtime::BuildStorage;
 pub use sp_runtime::{Perbill, Permill};
 
-/// Import the template pallet.
 pub use inherents_example;
+pub use weather_oracle;
 
 /// An index to a block.
 pub type BlockNumber = u32;
@@ -67,7 +68,17 @@ pub type Index = u32;
 /// A hash of some data used by the chain.
 pub type Hash = sp_core::H256;
 
-pub type InherentDataType = u16;
+pub type InherentExampleDataType = u16;
+pub type WeatherDataType = WeatherData;
+
+#[derive(Clone, PartialEq, Eq, Encode, Decode, Default, Debug, TypeInfo, MaxEncodedLen)]
+pub struct WeatherData(Permill);
+
+impl weather_oracle::DeconstructableAsFloat for WeatherData {
+	fn deconstruct(&self) -> f32 {
+		self.0.deconstruct() as f32 / (10.0 * 1000.0)
+	}
+}
 
 /// Opaque types. These are used by the CLI to instantiate machinery that don't need to know
 /// the specifics of the runtime. They can then be made to be agnostic over specific formats
@@ -92,6 +103,8 @@ pub mod opaque {
 		}
 	}
 }
+
+pub mod runtime_apis;
 
 // To learn more about runtime versioning, see:
 // https://docs.substrate.io/main-docs/build/upgrade#runtime-versioning
@@ -273,7 +286,13 @@ impl pallet_sudo::Config for Runtime {
 impl inherents_example::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type WeightInfo = inherents_example::weights::SubstrateWeight<Runtime>;
-	type InherentDataType = InherentDataType;
+	type InherentDataType = InherentExampleDataType;
+}
+
+impl weather_oracle::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type WeightInfo = weather_oracle::weights::SubstrateWeight<Runtime>;
+	type InherentDataType = WeatherDataType;
 }
 
 // Create the runtime by composing the FRAME pallets that were previously configured.
@@ -293,6 +312,7 @@ construct_runtime!(
 		Sudo: pallet_sudo,
 		// Include the custom logic from the pallet-template in the runtime.
 		InherentsExample: inherents_example,
+		WeatherOracle: weather_oracle,
 	}
 );
 
@@ -340,6 +360,7 @@ mod benches {
 		[pallet_balances, Balances]
 		[pallet_timestamp, Timestamp]
 		[inherents_example, InherentsExample]
+		[weather_oracle, WeatherOracle]
 	);
 }
 
@@ -518,6 +539,13 @@ impl_runtime_apis! {
 			TransactionPayment::length_to_fee(length)
 		}
 	}
+
+	impl runtime_apis::WeatherOrder<Block> for Runtime {
+		fn weather_order() -> Option<(i16, i16)> {
+			WeatherOracle::weather_order()
+		}
+	}
+
 
 	#[cfg(feature = "runtime-benchmarks")]
 	impl frame_benchmarking::Benchmark<Block> for Runtime {
